@@ -1,0 +1,248 @@
+# What the extraction model looks for. Rules come from audit_prompt_v6.
+#
+# The model is called once per GROUP per card version. Each group gets only the
+# pages that match its keywords (most matches first, up to max_chars), so a call
+# stays small enough for Qwen3.5-4B on a 6 GB GPU.
+#
+# Per field:
+#   question  what to find, in plain words
+#   rules     audit-prompt rules the model must follow
+#   normalized JSON-schema shape of normalized_value (null always allowed)
+#
+# Every field comes back as:
+#   {status, raw_value, normalized_value, quote, page, confidence}
+
+prompt_version: extract-v2
+
+groups:
+  # ------------------------------------------------------------------ identity
+  identity:
+    thinking: false
+    max_chars: 14000
+    first_pages: 2          # always include the first pages (title, issuer, date)
+    last_pages: 1           # and the last page (contact details, signature block)
+    keywords: [annual percentage rate, effective, as of, issued by, national association, "n.a.", federal credit union,
+               business, commercial, corporate, secured, security deposit, resident, contact us, call us, customer service,
+               "www.", "p.o. box", mailing address]
+    fields:
+      card_name:
+        question: The product name of the card, exactly as written (e.g. "Citi Double Cash Card", "Visa Platinum").
+        rules:
+          - Rate, credit-limit or creditworthiness tiers of one product are ONE card.
+          - If several products are covered, give the main one and mention the others in raw_value.
+        normalized: {type: "null"}
+      issuer_name_in_pdf:
+        question: The legal name of the bank or credit union that issues the card, as written.
+        rules:
+          - For fintech or store cards, give the bank that issues the card (e.g. "issued by WebBank").
+        normalized: {type: "null"}
+      charter_hint:
+        question: Charter wording attached to the issuer name, as written (e.g. "National Association", "N.A.", "Federal Credit Union", "FSB", "state-chartered").
+        rules: [Copy only the charter wording, not the whole name.]
+        normalized: {type: "null"}
+      effective_date:
+        question: The effective or "as of" date printed in the document.
+        rules: [Only a date printed in the text. Do not use dates from the file name.]
+        normalized: {type: string, pattern: "^\\d{4}-\\d{2}-\\d{2}$"}
+      card_type:
+        question: Is this a business card or a consumer card?
+        rules:
+          - business if the document says business, commercial or corporate use; otherwise consumer.
+          - If nothing is stated, status found, normalized "consumer", confidence medium, raw_value "default: not stated".
+        normalized: {type: string, enum: [consumer, business]}
+      market_scope:
+        question: Is the card for U.S. consumers, or limited to residents of other countries?
+        rules:
+          - non_us when eligibility or residence is limited to other countries; quote the wording.
+          - unclear only when the text makes it genuinely unclear.
+        normalized: {type: string, enum: [us_consumer, non_us, unclear]}
+      secured:
+        question: Does the card require a security deposit?
+        rules: ["If the document never mentions a security deposit or a secured card, status not_present (not false)."]
+        normalized: {type: boolean}
+      issuer_contact:
+        question: Phone number(s), website and mailing address given for questions or for requesting documents.
+        rules: ['phone is a list of every customer-service number as printed, e.g. ["1-877-313-6762"]; website and address null if not printed.']
+        normalized:
+          type: object
+          properties:
+            phone: {type: array, items: {type: string}}
+            website: {type: [string, "null"]}
+            address: {type: [string, "null"]}
+
+  # ------------------------------------------------------------------ pricing (the "Schumer box")
+  pricing:
+    thinking: false
+    max_chars: 16000
+    # pages containing one of these are always sent (the pricing table); matched on text with
+    # markdown removed
+    anchors: [interest rates and interest charges, (apr) for purchases, apr for purchases]
+    keywords: [interest rates and interest charges, annual percentage rate, apr for purchases, balance transfer,
+               cash advance, penalty apr, paying interest, minimum interest charge, fees, annual fee,
+               foreign transaction, late payment, returned payment, over-the-credit-limit, prime rate, due date]
+    fields:
+      purchase_apr:
+        question: The standard APR for purchases (or the range), the introductory APR and how long it lasts, whether it is variable, and the index + margin if shown (e.g. "Prime + 22.87%").
+        rules:
+          - Percentages as plain numbers (18.49, not "18.49%").
+          - '"17.49% to 27.49%" -> min 17.49, max 27.49. One rate -> min = max. variable true when it varies with the Prime Rate.'
+          - '"Prime + 14.74% to Prime + 24.74%" -> margin_min 14.74, margin_max 24.74 (and min / max from the APRs shown).'
+          - 'Intro "0% for 18 months" -> intro_apr 0, intro_months 18. No intro rate -> both null.'
+        normalized: &apr
+          type: object
+          properties:
+            min: {type: [number, "null"]}
+            max: {type: [number, "null"]}
+            variable: {type: [boolean, "null"]}
+            margin_min: {type: [number, "null"]}
+            margin_max: {type: [number, "null"]}
+            intro_apr: {type: [number, "null"]}
+            intro_months: {type: [integer, "null"]}
+      balance_transfer_apr:
+        question: The APR for balance transfers, including any introductory rate and its length.
+        rules: ['If a footnote says balance transfers are treated as cash advances, say so in raw_value.']
+        normalized: *apr
+      balance_transfer_fee:
+        question: The balance transfer fee (e.g. "Either $5 or 3% of the amount of each transfer, whichever is greater").
+        rules: ['"Either $5 or 3% ..., whichever is greater" -> pct 3, min_usd 5, max_usd null. "3% (max $100)" -> pct 3, max_usd 100.']
+        normalized: &fee
+          type: object
+          properties:
+            pct: {type: [number, "null"]}
+            min_usd: {type: [number, "null"]}
+            max_usd: {type: [number, "null"]}
+      cash_advance_apr:
+        question: The APR for cash advances.
+        rules: []
+        normalized: *apr
+      cash_advance_fee:
+        question: The cash advance fee.
+        rules: ['"Either $10 or 5% ..., whichever is greater" -> pct 5, min_usd 10, max_usd null.']
+        normalized: *fee
+      late_fee:
+        question: The late payment fee, including first vs. repeat amounts and any cap (e.g. "not more than the minimum payment due").
+        rules: ['"Up to $41" -> first_usd 41, repeat_usd null, max_usd 41. "$30, or $41 if late again within 6 months" -> first_usd 30, repeat_usd 41, max_usd 41.']
+        normalized:
+          type: object
+          properties:
+            first_usd: {type: [number, "null"]}
+            repeat_usd: {type: [number, "null"]}
+            max_usd: {type: [number, "null"]}
+      returned_payment_fee:
+        question: The returned payment fee in USD.
+        rules: []
+        normalized: {type: number}
+      other_penalty_fees:
+        question: Any other penalty fees, e.g. an over-the-credit-limit fee, with their amounts.
+        rules: [normalized is an object of fee name -> USD amount.]
+        normalized: {type: object, additionalProperties: {type: number}}
+      penalty_apr:
+        question: The penalty APR, what triggers it, and how long it lasts.
+        rules: []
+        normalized:
+          type: object
+          properties:
+            max: {type: [number, "null"]}
+            triggers: {type: array, items: {type: string}}
+            duration: {type: [string, "null"]}
+      payment_due_days:
+        question: 'How many days after the close of each billing cycle the payment is due ("Your due date is at least N days after...").'
+        rules: []
+        normalized: {type: integer}
+      interest_free_grace_period:
+        question: The wording of "How to avoid paying interest on purchases" (the "Paying Interest" row).
+        rules: [raw_value = the wording; normalized null.]
+        normalized: {type: "null"}
+      annual_fee:
+        question: The annual fee, including a free first year, tiers, and any initiation fee.
+        rules: ['"None" or "$0" = status stated_none.']
+        normalized:
+          type: object
+          properties:
+            first_year_usd: {type: [number, "null"]}
+            min_usd: {type: [number, "null"]}
+            max_usd: {type: [number, "null"]}
+            initiation_usd: {type: [number, "null"]}
+      foreign_transaction_fee:
+        question: The foreign transaction fee, as a percent.
+        rules: ['"None" = status stated_none, normalized 0.']
+        normalized: {type: number}
+      minimum_interest_charge:
+        question: The minimum interest charge in USD.
+        rules: []
+        normalized: {type: number}
+
+  # ------------------------------------------------------------------ late fee grace (agreement text)
+  late_fee_rules:
+    thinking: true
+    max_chars: 12000
+    keywords: [late fee, late payment, late charge, payment due date, days after, days late, if we do not receive,
+               minimum payment]
+    fields:
+      late_fee_grace_days:
+        question: How many days after the payment due date before a late fee is charged?
+        rules:
+          - Usually in the agreement text, not the pricing table.
+          - '"by the due date" = 0; "within 15 days after the Payment Due Date" = 15; "if you are 6 or more days late" = 5.'
+          - Put the exact wording in raw_value and quote.
+        normalized: {type: integer}
+
+  # ------------------------------------------------------------------ legal rights
+  legal:
+    thinking: true
+    max_chars: 16000
+    keywords: [arbitration, arbitrator, class action, jury, waive, waiver, reject, opt out, opt-out, right to reject,
+               small claims, military lending act, covered borrower, governing law, governed by, laws of the state,
+               notice of claim, dispute]
+    fields:
+      arbitration_clause:
+        question: Does the agreement contain an arbitration clause?
+        rules:
+          - A "notice of claim" or notice-and-cure clause is NOT arbitration.
+          - If there is no arbitration clause, status not_present and normalized false.
+        normalized: {type: boolean}
+      class_action_waiver:
+        question: Does the agreement waive the right to bring or join a class action?
+        rules: []
+        normalized: {type: boolean}
+      jury_trial_waiver:
+        question: Is there a jury trial waiver, and where is it?
+        rules: [standalone = its own clause; within_arbitration = only inside the arbitration clause; none = no jury waiver.]
+        normalized: {type: string, enum: [standalone, within_arbitration, none]}
+      arbitration_opt_out:
+        question: Can the cardholder reject (opt out of) arbitration? If yes, the deadline exactly as written (e.g. "45 days after account opening") and how (mail, phone, online).
+        rules:
+          - If there is no arbitration clause, status not_applicable.
+          - Keep the deadline wording exactly in raw_value.
+        normalized:
+          type: object
+          properties:
+            allowed: {type: boolean}
+            days: {type: [integer, "null"]}
+            from: {type: [string, "null"], enum: [account_opening, first_purchase, other, null]}
+            method: {type: array, items: {type: string, enum: [mail, phone, online]}}
+      military_exception:
+        question: Does the ARBITRATION CLAUSE say it does not apply to Military Lending Act covered borrowers?
+        rules: [A general MLA notice elsewhere is NOT an exception. Only the arbitration clause excluding covered borrowers counts.]
+        normalized: {type: boolean}
+      small_claims_carveout:
+        question: Does the agreement let either party use small claims court instead of arbitration?
+        rules: []
+        normalized: {type: boolean}
+      governing_law_state:
+        question: Which state's law governs the agreement?
+        rules: [normalized = two-letter state code, e.g. "SD".]
+        normalized: {type: string, pattern: "^[A-Z]{2}$"}
+
+# ------------------------------------------------------------------ regulations (field 32, not in audit-v6)
+regulations:
+  thinking: false
+  max_chars: 14000
+  question: >
+    List every law or regulation this agreement cites by name, or gives a notice or right for.
+    Use only these codes: TILA_REGZ, FCBA, CARD_ACT, MLA, SCRA, FAA, ECOA_REGB, FCRA, ESIGN, TCPA, GLBA, STATE_LAW.
+    mention_type is one of cited_by_name, notice_included, right_granted, exception, indirect_reference.
+    For a state-law notice give the two-letter state. Quote the sentence that mentions it.
+    At most ONE entry per law and mention_type (per state for STATE_LAW). Only laws that are named
+    or clearly referred to; ordinary contract terms are not regulations. If none, return an empty list.
+  # candidate pages are found with the search_terms in the regulations table (db/init/03_seed_regulations.sql)

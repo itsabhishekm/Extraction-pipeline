@@ -1,0 +1,19 @@
+# Worked examples added to the extraction prompts (up to 2 per field group).
+# They show the model the expected answer format on a DIFFERENT card.
+#
+# Built from hand-checked answer-key files marked "used_as_example": true:
+#     python run.py eval --make-examples
+# (those files are never scored by the eval). Or write entries by hand:
+#
+# groups:
+#   pricing:
+#     - text: |
+#         === [D1 page 1] ===
+#         | Annual Fee | None |
+#       answer:
+#         annual_fee: {status: stated_none, raw_value: "None", normalized_value: {first_year_usd: 0, min_usd: 0,
+#                      max_usd: 0, initiation_usd: null}, quote: "Annual Fee None", doc: D1, page: 1, confidence: high}
+#
+# Changing this file changes the code_version recorded with every value.
+
+groups: {}

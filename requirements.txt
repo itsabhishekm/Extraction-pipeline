@@ -1,0 +1,10 @@
+# Install PyTorch with CUDA FIRST (see SETUP.md step 5), then:  pip install -r requirements.txt
+pymupdf==2.0
+pymupdf4llm==2.0
+psycopg[binary]==3.3.6
+PyYAML==6.0.3
+ollama==0.6.3            # talks to the local Ollama server (GLM-OCR, Qwen3.5-4B)
+qdrant-client==1.20.0    # vector database client
+FlagEmbedding==1.4.2     # BGE-M3 dense + sparse embeddings (needs torch)
+jsonschema==4.25.1      # schema check of every normalized value (Validation Gate)
+langsmith==0.14.12      # optional LangSmith tracing (config tracing.langsmith)

@@ -1,0 +1,13 @@
+SET search_path=cc;
+INSERT INTO regulations VALUES ('TILA_REGZ','Truth in Lending Act / Regulation Z','15 USC 1601; 12 CFR 1026','disclosure','The disclosures themselves, APR wording',ARRAY['Truth in Lending','Regulation Z','12 CFR 1026','TILA']);
+INSERT INTO regulations VALUES ('FCBA','Fair Credit Billing Act','15 USC 1666','consumer_right','The "Your Billing Rights" notice',ARRAY['Fair Credit Billing','Your Billing Rights','billing error']);
+INSERT INTO regulations VALUES ('CARD_ACT','Credit CARD Act of 2009','Pub. L. 111-24','disclosure','Payment allocation, rate increase notice rules',ARRAY['CARD Act','Credit Card Accountability','45 days','payment allocation']);
+INSERT INTO regulations VALUES ('MLA','Military Lending Act','10 USC 987; 32 CFR 232','military','MLA disclosure, often the arbitration exception',ARRAY['Military Lending Act','covered borrower','32 CFR 232','10 U.S.C. 987']);
+INSERT INTO regulations VALUES ('SCRA','Servicemembers Civil Relief Act','50 USC 3901 et seq.','military','Rate cap for active duty',ARRAY['Servicemembers Civil Relief','SCRA','active duty','military service']);
+INSERT INTO regulations VALUES ('FAA','Federal Arbitration Act','9 USC 1 et seq.','dispute','The basis for the arbitration clause',ARRAY['Federal Arbitration Act','9 U.S.C.','FAA']);
+INSERT INTO regulations VALUES ('ECOA_REGB','Equal Credit Opportunity Act / Regulation B','15 USC 1691; 12 CFR 1002','state','State notices (e.g. Ohio, Wisconsin married persons, New York, California)',ARRAY['Equal Credit Opportunity','Ohio anti-discrimination','married','Wisconsin','discriminat']);
+INSERT INTO regulations VALUES ('FCRA','Fair Credit Reporting Act','15 USC 1681','credit_reporting','Credit reporting notice, disputing reported info',ARRAY['Fair Credit Reporting','credit reporting agenc','consumer reporting agenc','credit bureau']);
+INSERT INTO regulations VALUES ('ESIGN','E-SIGN Act','15 USC 7001','consent','Consent to electronic documents',ARRAY['E-SIGN','Electronic Signatures','electronic communications','consent to receive']);
+INSERT INTO regulations VALUES ('TCPA','Telephone Consumer Protection Act','47 USC 227','consent','Consent to calls and texts',ARRAY['Telephone Consumer Protection','autodialer','text messages','prerecorded']);
+INSERT INTO regulations VALUES ('GLBA','Gramm-Leach-Bliley Act','15 USC 6801','privacy','Privacy notice',ARRAY['Gramm-Leach-Bliley','privacy notice','Privacy Policy','nonpublic personal information']);
+INSERT INTO regulations VALUES ('STATE_LAW','State laws','varies','state','Governing law plus state-specific notices',ARRAY['governed by the laws of','residents of','NOTICE TO','state law']);

@@ -1,0 +1,23 @@
+# machine-specific settings (setup.ps1 writes them from the *.example.yaml templates)
+config.yaml
+config.pilot.yaml
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# pipeline output and data never go in git (they live under data_root, but just in case)
+*.log
+retry_queue.jsonl
+traces/
+releases/
+*.pdf
+*.md.bak
+
+# editors / OS
+.vscode/
+.idea/
+Thumbs.db
+.DS_Store

@@ -1,0 +1,79 @@
+# TEMPLATE. setup.ps1 copies this to config.pilot.yaml and fills in the paths for this computer.
+# Edit settings here (they are shared through git); edit paths only in config.pilot.yaml.
+# Same as config.yaml, but reads only the 19 pilot PDFs.
+# Run with:  python run.py all --config config.pilot.yaml
+# Text extracted here is reused by the full run (documents are matched by hash).
+
+quarter: pilot
+
+input_root: '__PILOT_ROOT__'
+
+data_root: '__DATA_ROOT__'
+
+database_url: 'postgresql://cc:cc@localhost:5432/cc'
+
+text:
+  min_chars: 200
+  min_words: 30
+  image_cover_for_ocr: 0.2
+  min_drawings_for_ocr: 500
+  garbled_max_bad: 0.15
+
+extraction:
+  all_versions: true
+
+ocr:
+  dpi: 150                  # page image resolution sent to GLM-OCR
+
+validate:
+  llm_check: true           # also ask Qwen whether each quote supports its value
+  max_retries: 2            # failed retries before a value goes to human review
+  double_read: true         # second, independent read of the pricing fields, one call per PDF
+  double_read_groups: [pricing]
+  vision_fallback: true     # retries of pricing fields also send the page images (jumbled tables)
+  # Plausible ranges (business rules). A value outside its range goes to the retry queue.
+  # Defaults are in pipeline/stage_validate.py (DEFAULT_RANGES); override here, e.g.
+  # ranges: {late_fee: [0, 45], purchase_apr: [0, 36]}
+
+llm:
+  # Output caps per model call (tokens; thinking counts too). Without them Qwen can think or repeat
+  # itself until the context is full (~5 min, no answer). A call that hits the cap is asked again
+  # with thinking off.
+  max_tokens: 4096
+  think_max_tokens: 7000
+  num_ctx: 16384
+
+models:
+  ocr: glm-ocr
+  extract: 'qwen3.5:4b'
+  bge_m3_path: '__DATA_ROOT__\models\bge-m3'
+
+embed:
+  chunk_chars: 1200         # characters per chunk (chunks never cross a page)
+  overlap_chars: 200
+  batch_size: 8             # BGE-M3 batch size on the RTX 3050 (lower it if CUDA runs out of memory)
+  max_length: 1024          # tokens per chunk given to BGE-M3
+
+qdrant:
+  url: 'http://localhost:6333'   # from docker-compose.yml; a folder path here uses Qdrant local mode
+  collection: cc_agreements
+
+tracing:
+  full_text: true           # keep full prompts and answers in <data_root>/traces/<date>.jsonl
+  langsmith: false          # true + LANGSMITH_API_KEY set = also send every call to LangSmith (cloud)
+  langsmith_project: cc-pipeline
+
+eval:
+  answer_key_dir: evals/answer_key   # hand-checked card files (python run.py eval --make-template)
+  min_cards: 10             # pilot: checked cards needed before a release can pass
+  min_overall: 0.90         # overall field accuracy
+  min_field: 0.80           # every field (with at least min_field_n labelled cards)
+  min_field_n: 5
+  max_drop: 0.02            # no field may drop more than this below the last passing eval
+
+integrity:
+  allow_open_review: false  # true = publish even with human-review items not yet decided
+  search_tests: search_tests.yaml
+
+logging:
+  color: auto               # auto = colours in a console, none when output goes to a file; always / never

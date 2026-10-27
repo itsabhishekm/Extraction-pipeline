@@ -1,0 +1,36 @@
+# Postgres + Qdrant for the pipeline. Start with:  docker compose up -d
+# On first start Postgres creates the "cc" schema and seeds field definitions and
+# regulations from the db/init/ folder (files run in name order).
+# Qdrant (vector search) listens on http://localhost:6333 (dashboard: /dashboard).
+
+name: cc-pipeline
+
+services:
+  postgres:
+    image: postgres:16
+    container_name: cc-postgres
+    environment:
+      POSTGRES_USER: cc
+      POSTGRES_PASSWORD: cc
+      POSTGRES_DB: cc
+    ports:
+      - "5432:5432"
+    volumes:
+      - cc_pgdata:/var/lib/postgresql/data
+      - ./db/init:/docker-entrypoint-initdb.d:ro
+    restart: unless-stopped
+
+  qdrant:
+    image: qdrant/qdrant:v1.20.0
+    container_name: cc-qdrant
+    ports:
+      - "6333:6333"
+    volumes:
+      - cc_qdrant:/qdrant/storage
+    restart: unless-stopped
+
+volumes:
+  # Docker keeps this inside its own disk image. To keep it off C:, move that image
+  # in Docker Desktop: Settings > Resources > Advanced > Disk image location.
+  cc_pgdata:
+  cc_qdrant:

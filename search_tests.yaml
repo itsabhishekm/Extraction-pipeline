@@ -1,0 +1,27 @@
+# Test searches for the Integrity Check (python run.py integrity).
+# Each query must return a matching chunk in the top `top` results (default 3).
+#   issuer        search only this issuer folder (optional)
+#   quarter       run this test only for this quarter (optional; no quarter = every quarter)
+#   expect        what a matching result must have (all given keys must match):
+#                   issuer, file_contains (part of the file name), text_contains (part of the chunk text)
+# Add tests for things you know are in the PDFs. A failing test means the embeddings or Qdrant
+# do not hold what Postgres says they hold.
+
+tests:
+  - query: Can I reject the arbitration provision?
+    issuer: CITIBANK, N.A
+    expect: {text_contains: arbitration}
+
+  - query: late payment fee
+    issuer: SYNCHRONY FINANCIAL
+    expect: {file_contains: Phillips 66, text_contains: late}
+
+  - query: Pathfinder Rewards Visa annual percentage rate for purchases
+    expect: {issuer: PENTAGON FEDERAL CREDIT UNION}
+
+  - query: Military Lending Act covered borrower
+    expect: {text_contains: military}
+
+  - query: Platinum Card annual membership fee
+    issuer: AMERICAN EXPRESS TRAVEL RELATED SERVICES COMPANY, INC
+    expect: {file_contains: Platinum}
