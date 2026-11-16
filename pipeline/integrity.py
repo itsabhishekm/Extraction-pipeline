@@ -23,7 +23,7 @@ from pathlib import Path
 
 import yaml
 
-from .config import HERE, Config, setup_logging
+from .config import HERE, Config, issuer_list, issuer_selected, setup_logging
 from .db import connect
 from .postprocess import display_for
 
@@ -83,7 +83,9 @@ def run(cfg: Config) -> bool:
         # files_recorded
         # the same rule as the scan stage: one level of issuer folders, names starting with skip_prefix skipped
         skip = cfg.raw.get("skip_prefix", "_")
+        wanted = issuer_list(cfg)
         on_disk = {(d.name, f.name) for d in cfg.input_root.iterdir() if d.is_dir() and not d.name.startswith(skip)
+                   and issuer_selected(cfg, d.name, wanted)
                    for f in d.iterdir() if f.is_file() and not f.name.startswith(skip)
                    and f.suffix.lower() == ".pdf"}
         in_db = {(r["folder_name"], r["file_name"]) for r in conn.execute(

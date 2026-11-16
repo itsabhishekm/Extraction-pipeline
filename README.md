@@ -41,6 +41,18 @@ powershell -ExecutionPolicy Bypass -File .\setup.ps1 -InputRoot "D:\2026_Q1"
 - Installing Docker Desktop asks for administrator approval and needs one restart: restart and run
   the same command again; finished steps are skipped.
 
+### Which banks are processed
+
+The full-quarter run only processes the issuer folders listed in **`issuers/large_banks.csv`**
+(82 folders = 63 large banks, about 1,379 PDFs); every other folder under `input_root` is skipped.
+- To change the selection, edit that CSV (column `folder_name` must match the folder name; case,
+  extra spaces and a trailing dot don't matter). Column `entity` groups folders of one bank.
+- To process every folder, remove the `issuers_file:` line from `config.yaml`.
+- The scan log says how many folders were selected and warns about listed banks with no folder.
+- If the database already holds banks from an earlier run without the list, start clean once:
+  `.\next_steps.ps1 -Stage full -ResetDb`.
+- The pilot (`config.pilot.yaml`) is not filtered: it always uses its own 19 test PDFs.
+
 ### Every working session
 
 ```
@@ -109,6 +121,7 @@ Every stage only picks up work not done yet, so re-running is safe; stop any tim
 | `config.pilot.example.yaml` | Same, for the 19 pilot PDFs -> `config.pilot.yaml` |
 | `config.yaml`, `config.pilot.yaml` | This computer's settings: PDF folder, data folder, database, models, thresholds (written by setup, not in git) |
 | `fields.yaml` | **What the model looks for**: the 31 fields in 4 groups (identity, pricing, late-fee rules, legal), each with its question, rules, normalized format and the keywords that pick the pages; plus the regulations question. Changing it changes the prompt version |
+| `issuers/large_banks.csv` | The banks the full-quarter run processes (folder name, PDF count, bank entity); set by `issuers_file` in the config |
 | `examples.yaml` | Worked examples added to the prompts (built by `run.py eval --make-examples`; empty at first) |
 | `search_tests.yaml` | Test searches the integrity check must pass |
 | `requirements.txt` | Python libraries (installed by setup) |

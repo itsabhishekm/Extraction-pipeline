@@ -12,6 +12,10 @@ input_root: '__INPUT_ROOT__'
 # .md text, logs, and (later) model downloads. Change D: to your drive letter.
 data_root: '__DATA_ROOT__'
 
+# Only process the issuer folders listed in this CSV (column folder_name; entity is optional).
+# Remove the line or leave it empty to process every issuer folder under input_root.
+issuers_file: 'issuers/large_banks.csv'
+
 # Postgres from docker-compose.yml
 database_url: 'postgresql://cc:cc@localhost:5432/cc'
 

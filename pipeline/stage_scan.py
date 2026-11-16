@@ -7,7 +7,7 @@ the stage can be re-run at any time and only picks up new files.
 import hashlib
 from pathlib import Path
 
-from .config import Config, progress, setup_logging
+from .config import Config, _norm_folder, issuer_list, progress, setup_logging
 from .db import connect
 from .naming import slugify, submission_id
 
@@ -28,6 +28,17 @@ def run(cfg: Config) -> dict:
 
     folders = [f for f in sorted(cfg.input_root.iterdir(), key=lambda p: p.name.lower())
                if f.is_dir() and not f.name.startswith(skip)]
+    wanted = issuer_list(cfg)
+    if wanted is not None:
+        all_n = len(folders)
+        folders = [f for f in folders if _norm_folder(f.name) in wanted]
+        found = {_norm_folder(f.name) for f in folders}
+        missing = [v[0] for k, v in wanted.items() if k not in found]
+        log.info("issuer list %s: %d of %d folders selected (%d entities); %d folders skipped",
+                 cfg.raw.get("issuers_file"), len(folders), all_n, len({v[1] for v in wanted.values()}),
+                 all_n - len(folders))
+        for m in missing:
+            log.warning("listed issuer has no folder in %s: %s", cfg.input_root, m)
     log.info("%d issuer folders to scan in %s", len(folders), cfg.input_root)
     progress.start(len(folders), "folders")
     with connect(cfg.database_url) as conn:
@@ -87,5 +98,20 @@ def run(cfg: Config) -> dict:
             conn.commit()
 
     progress.stop()
+    if wanted is not None:
+        # documents of issuers that are not in the list (e.g. scanned before the list was set)
+        others = conn_others(cfg, wanted)
+        if others:
+            log.warning("%d issuers already in the database are not in the issuer list (scanned earlier); "
+                        "later stages would still process them. To drop them: next_steps.ps1 -ResetDb, "
+                        "then run again. Examples: %s", len(others), "; ".join(others[:5]))
     log.info("scan done: %s", counts)
     return counts
+
+
+def conn_others(cfg: Config, wanted: dict) -> list[str]:
+    with connect(cfg.database_url) as conn:
+        names = [r["folder_name"] for r in conn.execute(
+            """SELECT DISTINCT i.folder_name FROM issuers i JOIN document_files f USING (issuer_id)
+               WHERE f.quarter = %s ORDER BY 1""", (cfg.quarter,)).fetchall()]
+    return [n for n in names if _norm_folder(n) not in wanted]

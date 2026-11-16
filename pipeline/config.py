@@ -31,6 +31,37 @@ class Config:
         return self.raw.get(name, {})
 
 
+def _norm_folder(name: str) -> str:
+    """Folder names compared without case, extra spaces or trailing dots (Windows drops trailing
+    dots from folder names, so "CITIBANK, N.A." in a list is the folder "CITIBANK, N.A")."""
+    return " ".join(name.split()).rstrip(". ").casefold()
+
+
+def issuer_list(cfg: "Config") -> dict | None:
+    """The issuers to process, from config `issuers_file` (a CSV with a folder_name column, optional
+    entity column). Returns {normalized folder name: (folder name as listed, entity)}, or None when no
+    list is set (= every issuer folder)."""
+    import csv
+    f = cfg.raw.get("issuers_file")
+    if not f:
+        return None
+    path = Path(f) if Path(f).is_absolute() else HERE / f
+    if not path.exists():
+        raise SystemExit(f"issuers_file not found: {path}  (edit config.yaml)")
+    out = {}
+    with path.open(encoding="utf-8-sig", newline="") as fh:
+        for row in csv.DictReader(fh):
+            name = (row.get("folder_name") or "").strip()
+            if name and name.upper() != "TOTAL":
+                out[_norm_folder(name)] = (name, (row.get("entity") or "").strip())
+    return out
+
+
+def issuer_selected(cfg: "Config", folder_name: str, wanted: dict | None = None) -> bool:
+    wanted = issuer_list(cfg) if wanted is None else wanted
+    return wanted is None or _norm_folder(folder_name) in wanted
+
+
 def load_config(path: str | None = None) -> Config:
     path = Path(path or os.environ.get("CC_CONFIG", HERE / "config.yaml"))
     raw = yaml.safe_load(path.read_text(encoding="utf-8"))
